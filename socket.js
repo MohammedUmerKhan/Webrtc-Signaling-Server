@@ -37,6 +37,7 @@ export const initSocketServer = (httpServer) => {
     // socket.on("call", handleCall);
     socket.on("ringOnly", (data) => handleRingOnly(socket, data));
     socket.on("ringResponse", (data) => handleRingResponse(socket, data));
+    socket.on("endRinging", (data) => handleEndRinging(socket, data));
     socket.on("call", (data) => handleCall(socket, data));
     socket.on("answerCall", (data) => handleAnswerCall(socket, data));
     socket.on("ICEcandidate", (data) => handleICEcandidate(socket, data));
@@ -115,6 +116,46 @@ const handleRingResponse = (socket, data) => {
         socket.to(targetSocketId).emit("response", {
           response: response,
           userData: userData,
+          callerId: callerId,
+        });
+      } else {
+        console.log("Target socket not found.");
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
+};
+//caller stop Ringing
+const handleEndRinging = (socket, data) => {
+  let { calleeId, callerId } = data;
+  // console.log(typeof data);  // console.log("test" + calleeId + callerData);
+  console.log("End Ringing client with ID:", calleeId);
+  // Find the socket ID associated with the calleeId
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == calleeId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("----------");
+        console.log(targetSocketId);
+        // Send a message to the specific user
+        socket.to(targetSocketId).emit("endRinging", {
+          calleeId: calleeId,
           callerId: callerId,
         });
       } else {
