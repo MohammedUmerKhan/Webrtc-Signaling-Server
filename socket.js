@@ -38,8 +38,8 @@ export const initSocketServer = (httpServer) => {
     socket.on("ringOnly", (data) => handleRingOnly(socket, data));
     socket.on("ringResponse", (data) => handleRingResponse(socket, data));
     socket.on("endRinging", (data) => handleEndRinging(socket, data));
-    socket.on("call", (data) => handleCall(socket, data));
-    socket.on("answerCall", (data) => handleAnswerCall(socket, data));
+    socket.on("offer", (data) => handleOffer(socket, data));
+    socket.on("answer", (data) => handleAnswer(socket, data));
     socket.on("ICEcandidate", (data) => handleICEcandidate(socket, data));
     socket.on("disconnect", () => handleDisconnect(socket));
   });
@@ -167,30 +167,123 @@ const handleEndRinging = (socket, data) => {
     .catch(console.log);
 };
 
-const handleCall = (socket, data) => {
-  let { calleeId, rtcMessage } = data;
-  socket.to(calleeId).emit("newCall", {
-    callerId: socket.user,
-    rtcMessage: rtcMessage,
-  });
+const handleOffer = (socket, data) => {
+  let { otherUserId, callerId, offer } = data;
+  // finding the other user
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == otherUserId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("Sending offer to User : " + otherUserId);
+        console.log(targetSocketId);
+        socket.to(targetSocketId).emit("offer", {
+          otherUserId: otherUserId,
+          callerId: callerId,
+          offer: offer,
+        });
+      } else {
+        console.log("Target socket not found.");
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
 };
 
-const handleAnswerCall = (socket, data) => {
-  let { callerId, rtcMessage } = data;
-  socket.to(callerId).emit("callAnswered", {
-    callee: socket.user,
-    rtcMessage: rtcMessage,
-  });
+const handleAnswer = (socket, data) => {
+  let { otherUserId, callerId, answer } = data;
+  // finding the other user
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == callerId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("Sending answer to User : " + callerId);
+        console.log(targetSocketId);
+        socket.to(targetSocketId).emit("answer", {
+          otherUserId: otherUserId,
+          callerId: callerId,
+          answer: answer,
+        });
+      } else {
+        console.log("Target socket not found.");
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
 };
 
 const handleICEcandidate = (socket, data) => {
-  console.log("ICEcandidate data.calleeId", data.calleeId);
-  let { calleeId, rtcMessage } = data;
-  console.log("socket.user emit", socket.user);
-  socket.to(calleeId).emit("ICEcandidate", {
-    sender: socket.user,
-    rtcMessage: rtcMessage,
-  });
+  let { otherUserId, candidate } = data;
+  console.log("$$$$$");
+  console.log("ICEcandidate for User : ", otherUserId);
+  //
+  // finding the other user
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == otherUserId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("Sending Candidate to User : " + otherUserId);
+        console.log(targetSocketId);
+        socket.to(targetSocketId).emit("ICEcandidate", {
+          otherUserId: otherUserId,
+          candidate: candidate,
+        });
+      } else {
+        console.log("Target socket not found.");
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
+  //
+
+  //
 };
 
 const handleDisconnect = (socket) => {
