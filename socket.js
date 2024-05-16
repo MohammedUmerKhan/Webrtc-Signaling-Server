@@ -41,6 +41,7 @@ export const initSocketServer = (httpServer) => {
     socket.on("offer", (data) => handleOffer(socket, data));
     socket.on("answer", (data) => handleAnswer(socket, data));
     socket.on("ICEcandidate", (data) => handleICEcandidate(socket, data));
+    socket.on("hangupCall", (data) => handleHangupCall(socket, data));
     socket.on("disconnect", () => handleDisconnect(socket));
   });
 };
@@ -290,6 +291,44 @@ const handleDisconnect = (socket) => {
   console.log(`User ${socket.user} disconnected`);
   printConnectedSockets();
 };
+
+const handleHangupCall = (socket, data) => {
+  // console.log("data" + data);
+  let userId = data;
+  // finding the other user
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == userId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("Sending HangUp Call to User : " + userId);
+        console.log(targetSocketId);
+        socket.to(targetSocketId).emit("hangup", {
+          userId: userId,
+        });
+      } else {
+        console.log("Target socket not found. UserID:" + userId);
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
+};
+
 // this is only to display the clients connected
 async function printConnectedSockets() {
   const sockets = await socketServer.fetchSockets();
