@@ -42,6 +42,8 @@ export const initSocketServer = (httpServer) => {
     socket.on("answer", (data) => handleAnswer(socket, data));
     socket.on("ICEcandidate", (data) => handleICEcandidate(socket, data));
     socket.on("hangupCall", (data) => handleHangupCall(socket, data));
+    socket.on("speechToText", (data) => handleSpeechToText(socket, data));
+
     socket.on("disconnect", () => handleDisconnect(socket));
   });
 };
@@ -285,6 +287,43 @@ const handleICEcandidate = (socket, data) => {
   //
 
   //
+};
+
+const handleSpeechToText = (socket, data) => {
+  let { userId, speechToTextData } = data;
+  // finding the other user
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == userId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("Sending speech to text data to User : " + userId);
+        console.log(targetSocketId);
+        socket.to(targetSocketId).emit("speechToTextResults", {
+          userId: userId,
+          speechToTextData: speechToTextData,
+        });
+      } else {
+        console.log("Target socket not found.");
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
 };
 
 const handleDisconnect = (socket) => {
