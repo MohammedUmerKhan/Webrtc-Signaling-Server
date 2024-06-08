@@ -44,6 +44,10 @@ export const initSocketServer = (httpServer) => {
     socket.on("hangupCall", (data) => handleHangupCall(socket, data));
     socket.on("speechToText", (data) => handleSpeechToText(socket, data));
     socket.on("textToSpeech", (data) => handleTextToSpeech(socket, data));
+    // New event handler for checking connected sockets
+    socket.on("checkConnectedSockets", () =>
+      handleCheckConnectedSockets(socket)
+    );
 
     socket.on("disconnect", () => handleDisconnect(socket));
   });
@@ -402,6 +406,16 @@ const handleHangupCall = (socket, data) => {
         //emit a response back to client
         socket.emit("clientOffline", "Offline");
       }
+    })
+    .catch(console.log);
+};
+
+const handleCheckConnectedSockets = (socket) => {
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      const connectedUsers = sockets.map((s) => s.user);
+      socket.emit("connectedUsers", connectedUsers);
     })
     .catch(console.log);
 };
