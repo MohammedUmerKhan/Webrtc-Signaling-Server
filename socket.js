@@ -50,6 +50,7 @@ export const initSocketServer = (httpServer) => {
     );
     // event handler for group chat
     socket.on("groupRingOnly", (data) => handleGroupRingOnly(socket, data));
+    socket.on("endGroupRinging", (data) => handleGroupEndRinging(socket, data));
 
     socket.on("disconnect", () => handleDisconnect(socket));
   });
@@ -439,7 +440,7 @@ const handleGroupRingOnly = (socket, data) => {
         // );
         // console.log("userId: " + userId + "  Type of : " + typeof userId);
         if (String(socket.user) === String(userId)) {
-          console.log("matched : " + socket.id);
+          // console.log("matched : " + socket.id);
           return socket.id;
         }
       }
@@ -480,6 +481,65 @@ const handleGroupRingOnly = (socket, data) => {
           userId: user2.userId,
           status: "Offline",
         });
+      }
+    })
+    .catch((err) => {
+      console.error("Error finding socket IDs:", err);
+    });
+};
+
+const handleGroupEndRinging = (socket, data) => {
+  const { callerData, user1, user2 } = data;
+  const { initiatorId, id1, id2 } = data;
+  console.log("End Group Ringing initiated by: " + initiatorId);
+
+  // Function to find the socket ID for a given user ID
+  const findSocketIdForUser = (userId) => {
+    return socketServer.fetchSockets().then((sockets) => {
+      for (const socket of sockets) {
+        if (String(socket.user) === String(userId)) {
+          return socket.id;
+        }
+      }
+      return null;
+    });
+  };
+
+  // Find and send to user1 first
+  findSocketIdForUser(id1)
+    .then((user1SocketId) => {
+      if (user1SocketId) {
+        console.log(`End Ringing user with ID: ${id1}`);
+        socket.to(user1SocketId).emit("endGroupChatRinging", {
+          initiatorId: initiatorId,
+          id1: id1,
+          id2: id2,
+        });
+      } else {
+        console.log(`User with ID ${id1} is offline.`);
+        // socket.emit("clientOffline", {
+        //   userId: user1.userId,
+        //   status: "Offline",
+        // });
+      }
+
+      // Find and send to user2 next
+      return findSocketIdForUser(id2);
+    })
+    .then((user2SocketId) => {
+      if (user2SocketId) {
+        console.log(`End Ringing user with ID: ${id2}`);
+        socket.to(user2SocketId).emit("endGroupChatRinging", {
+          initiatorId: initiatorId,
+          id1: id1,
+          id2: id2,
+        });
+      } else {
+        console.log(`User with ID ${id2} is offline.`);
+        // socket.emit("clientOffline", {
+        //   userId: user2.userId,
+        //   status: "Offline",
+        // });
       }
     })
     .catch((err) => {
