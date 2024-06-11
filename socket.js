@@ -48,6 +48,8 @@ export const initSocketServer = (httpServer) => {
     socket.on("checkConnectedSockets", () =>
       handleCheckConnectedSockets(socket)
     );
+    // event handler for group chat
+    socket.on("groupRingOnly", (data) => handleGroupRingOnly(socket, data));
 
     socket.on("disconnect", () => handleDisconnect(socket));
   });
@@ -418,6 +420,71 @@ const handleCheckConnectedSockets = (socket) => {
       socket.emit("connectedUsers", connectedUsers);
     })
     .catch(console.log);
+};
+
+const handleGroupRingOnly = (socket, data) => {
+  const { callerData, user1, user2 } = data;
+  console.log(
+    "Group Ringing initiated by:",
+    callerData.Id + " " + callerData.fname
+  );
+
+  // Function to find the socket ID for a given user ID
+  const findSocketIdForUser = (userId) => {
+    return socketServer.fetchSockets().then((sockets) => {
+      for (const socket of sockets) {
+        // console.log(socket);
+        // console.log(
+        //   "socket.user: " + socket.user + "  Type of : " + typeof socket.user
+        // );
+        // console.log("userId: " + userId + "  Type of : " + typeof userId);
+        if (String(socket.user) === String(userId)) {
+          console.log("matched : " + socket.id);
+          return socket.id;
+        }
+      }
+      return null;
+    });
+  };
+
+  // Find and send to user1 first
+  findSocketIdForUser(user1.userId)
+    .then((user1SocketId) => {
+      if (user1SocketId) {
+        console.log(`Ringing user1 with ID: ${user1.userId}`);
+        socket.to(user1SocketId).emit("groupRinging", {
+          callerData,
+          user: user2, // Send user2 data to user1
+        });
+      } else {
+        console.log(`User1 with ID ${user1.userId} is offline.`);
+        socket.emit("clientOffline", {
+          userId: user1.userId,
+          status: "Offline",
+        });
+      }
+
+      // Find and send to user2 next
+      return findSocketIdForUser(user2.userId);
+    })
+    .then((user2SocketId) => {
+      if (user2SocketId) {
+        console.log(`Ringing user2 with ID: ${user2.userId}`);
+        socket.to(user2SocketId).emit("groupRinging", {
+          callerData,
+          user: user1, // Send user1 data to user2
+        });
+      } else {
+        console.log(`User2 with ID ${user2.userId} is offline.`);
+        socket.emit("clientOffline", {
+          userId: user2.userId,
+          status: "Offline",
+        });
+      }
+    })
+    .catch((err) => {
+      console.error("Error finding socket IDs:", err);
+    });
 };
 
 // this is only to display the clients connected
