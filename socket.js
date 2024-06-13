@@ -51,6 +51,9 @@ export const initSocketServer = (httpServer) => {
     // event handler for group chat
     socket.on("groupRingOnly", (data) => handleGroupRingOnly(socket, data));
     socket.on("endGroupRinging", (data) => handleGroupEndRinging(socket, data));
+    socket.on("ringGroupResponse", (data) =>
+      handleRingGroupResponse(socket, data)
+    );
 
     socket.on("disconnect", () => handleDisconnect(socket));
   });
@@ -489,7 +492,6 @@ const handleGroupRingOnly = (socket, data) => {
 };
 
 const handleGroupEndRinging = (socket, data) => {
-  const { callerData, user1, user2 } = data;
   const { initiatorId, id1, id2 } = data;
   console.log("End Group Ringing initiated by: " + initiatorId);
 
@@ -540,6 +542,62 @@ const handleGroupEndRinging = (socket, data) => {
         //   userId: user2.userId,
         //   status: "Offline",
         // });
+      }
+    })
+    .catch((err) => {
+      console.error("Error finding socket IDs:", err);
+    });
+};
+
+const handleRingGroupResponse = (socket, data) => {
+  const { response, initiatorId, otherUserId1, otherUserId2 } = data;
+  console.log("Call accepted by user : " + initiatorId);
+
+  // Function to find the socket ID for a given user ID
+  const findSocketIdForUser = (userId) => {
+    return socketServer.fetchSockets().then((sockets) => {
+      for (const socket of sockets) {
+        if (String(socket.user) === String(userId)) {
+          return socket.id;
+        }
+      }
+      return null;
+    });
+  };
+
+  // Find and send to user1 first
+  findSocketIdForUser(otherUserId1)
+    .then((user1SocketId) => {
+      if (user1SocketId) {
+        console.log(
+          `Sending Group chat accepted response to ID: ${otherUserId1}`
+        );
+        socket.to(user1SocketId).emit("groupChatRingingResponse", {
+          response: response,
+          initiatorId: initiatorId,
+          otherUserId1: otherUserId1,
+          otherUserId2: otherUserId2,
+        });
+      } else {
+        console.log(`User with ID ${otherUserId1} is offline.`);
+      }
+
+      // Find and send to user2 next
+      return findSocketIdForUser(otherUserId2);
+    })
+    .then((user2SocketId) => {
+      if (user2SocketId) {
+        console.log(
+          `Sending Group chat accepted response to ID: ${otherUserId2}`
+        );
+        socket.to(user2SocketId).emit("groupChatRingingResponse", {
+          response: response,
+          initiatorId: initiatorId,
+          otherUserId1: otherUserId1,
+          otherUserId2: otherUserId2,
+        });
+      } else {
+        console.log(`User with ID ${otherUserId2} is offline.`);
       }
     })
     .catch((err) => {
