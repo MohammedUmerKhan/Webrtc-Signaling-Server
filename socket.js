@@ -44,17 +44,26 @@ export const initSocketServer = (httpServer) => {
     socket.on("hangupCall", (data) => handleHangupCall(socket, data));
     socket.on("speechToText", (data) => handleSpeechToText(socket, data));
     socket.on("textToSpeech", (data) => handleTextToSpeech(socket, data));
+
     // New event handler for checking connected sockets
     socket.on("checkConnectedSockets", () =>
       handleCheckConnectedSockets(socket)
     );
+
     // event handler for group chat
     socket.on("groupRingOnly", (data) => handleGroupRingOnly(socket, data));
     socket.on("endGroupRinging", (data) => handleGroupEndRinging(socket, data));
     socket.on("ringGroupResponse", (data) =>
       handleRingGroupResponse(socket, data)
     );
+    socket.on("sendGroupTextToSpeech", (data) =>
+      handleSendGroupTextToSpeech(socket, data)
+    );
+    socket.on("sendGroupSignToTextForSpeech", (data) =>
+      handleGroupSignToTextForSpeech(socket, data)
+    );
 
+    socket.on("sendVideoCallId", (data) => handleSendVideoCallId(socket, data));
     socket.on("disconnect", () => handleDisconnect(socket));
   });
 };
@@ -171,6 +180,46 @@ const handleEndRinging = (socket, data) => {
         socket.to(targetSocketId).emit("endRinging", {
           calleeId: calleeId,
           callerId: callerId,
+        });
+      } else {
+        console.log("Target socket not found.");
+        //emit a response back to client
+        socket.emit("clientOffline", "Offline");
+      }
+    })
+    .catch(console.log);
+};
+
+const handleSendVideoCallId = (socket, data) => {
+  let { senderId, receiverId, VCId } = data;
+  console.log("Sending VideoCallId to ID:", receiverId);
+  // Find the socket ID associated with the calleeId
+  let targetSocketId;
+  socketServer
+    .fetchSockets()
+    .then((sockets) => {
+      sockets.forEach((socket) => {
+        if (socket.user == receiverId) {
+          targetSocketId = socket.id;
+        }
+        console.log(
+          "Socket: " +
+            safeStringify(socket.id) +
+            " userId: " +
+            safeStringify(socket.user) +
+            " TargetId : " +
+            targetSocketId
+        );
+      });
+      // Check for targetSocketId after the promise has resolved
+      if (targetSocketId) {
+        console.log("----------");
+        console.log(targetSocketId);
+        // Send a message to the specific user
+        socket.to(targetSocketId).emit("receiveVideoCallId", {
+          senderId: senderId,
+          receiverId: receiverId,
+          VCId: VCId,
         });
       } else {
         console.log("Target socket not found.");
@@ -430,7 +479,7 @@ const handleGroupRingOnly = (socket, data) => {
   const { callerData, user1, user2 } = data;
   console.log(
     "Group Ringing initiated by:",
-    callerData.Id + " " + callerData.fname
+    callerData.userId + " " + callerData.fname
   );
 
   // Function to find the socket ID for a given user ID
@@ -595,6 +644,114 @@ const handleRingGroupResponse = (socket, data) => {
           initiatorId: initiatorId,
           otherUserId1: otherUserId1,
           otherUserId2: otherUserId2,
+        });
+      } else {
+        console.log(`User with ID ${otherUserId2} is offline.`);
+      }
+    })
+    .catch((err) => {
+      console.error("Error finding socket IDs:", err);
+    });
+};
+
+const handleSendGroupTextToSpeech = (socket, data) => {
+  const { userId, otherUserId1, otherUserId2, speechToTextData } = data;
+  console.log("Speech to Text Data sent from  : " + userId);
+
+  // Function to find the socket ID for a given user ID
+  const findSocketIdForUser = (userId) => {
+    return socketServer.fetchSockets().then((sockets) => {
+      for (const socket of sockets) {
+        if (String(socket.user) === String(userId)) {
+          return socket.id;
+        }
+      }
+      return null;
+    });
+  };
+
+  // Find and send to user1 first
+  findSocketIdForUser(otherUserId1)
+    .then((user1SocketId) => {
+      if (user1SocketId) {
+        console.log(`Sending Group chat TxtToSpeech to ID: ${otherUserId1}`);
+        socket.to(user1SocketId).emit("receiveGroupTextToSpeech", {
+          userId,
+          otherUserId1,
+          otherUserId2,
+          speechToTextData,
+        });
+      } else {
+        console.log(`User with ID ${otherUserId1} is offline.`);
+      }
+
+      // Find and send to user2 next
+      return findSocketIdForUser(otherUserId2);
+    })
+    .then((user2SocketId) => {
+      if (user2SocketId) {
+        console.log(`Sending Group chat TxtToSpeech to ID: ${otherUserId2}`);
+        socket.to(user2SocketId).emit("receiveGroupTextToSpeech", {
+          userId,
+          otherUserId1,
+          otherUserId2,
+          speechToTextData,
+        });
+      } else {
+        console.log(`User with ID ${otherUserId2} is offline.`);
+      }
+    })
+    .catch((err) => {
+      console.error("Error finding socket IDs:", err);
+    });
+};
+
+const handleGroupSignToTextForSpeech = (socket, data) => {
+  const { userId, otherUserId1, otherUserId2, SignToTextForSpeechData } = data;
+  console.log("Sign to Text For Speech Data sent from  : " + userId);
+
+  // Function to find the socket ID for a given user ID
+  const findSocketIdForUser = (userId) => {
+    return socketServer.fetchSockets().then((sockets) => {
+      for (const socket of sockets) {
+        if (String(socket.user) === String(userId)) {
+          return socket.id;
+        }
+      }
+      return null;
+    });
+  };
+
+  // Find and send to user1 first
+  findSocketIdForUser(otherUserId1)
+    .then((user1SocketId) => {
+      if (user1SocketId) {
+        console.log(
+          `Sending Sign to Text For Speech Data to ID: ${otherUserId1}`
+        );
+        socket.to(user1SocketId).emit("receiveGroupSignToTextForSpeech", {
+          userId,
+          otherUserId1,
+          otherUserId2,
+          SignToTextForSpeechData,
+        });
+      } else {
+        console.log(`User with ID ${otherUserId1} is offline.`);
+      }
+
+      // Find and send to user2 next
+      return findSocketIdForUser(otherUserId2);
+    })
+    .then((user2SocketId) => {
+      if (user2SocketId) {
+        console.log(
+          `Sending Sign to Text For Speech Data to ID: ${otherUserId2}`
+        );
+        socket.to(user2SocketId).emit("receiveGroupSignToTextForSpeech", {
+          userId,
+          otherUserId1,
+          otherUserId2,
+          SignToTextForSpeechData,
         });
       } else {
         console.log(`User with ID ${otherUserId2} is offline.`);
